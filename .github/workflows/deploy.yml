@@ -1,8 +1,10 @@
-name: Deploy to Render
+name: CI
 
+# Проверка кода при каждом push. Сам деплой делает Render (Auto-Deploy: On Commit).
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -18,17 +20,3 @@ jobs:
         run: |
           python -m compileall -q bot
           python -c "from bot.__main__ import build_dispatcher; build_dispatcher()"
-
-  deploy:
-    needs: check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Trigger Render deploy hook
-        env:
-          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
-        run: |
-          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
-            echo "::error::Secret RENDER_DEPLOY_HOOK is not set"; exit 1
-          fi
-          curl -fsS -X POST "$RENDER_DEPLOY_HOOK" > /dev/null
-          echo "Render deploy triggered"

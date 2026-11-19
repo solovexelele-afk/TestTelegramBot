@@ -33,7 +33,9 @@ Procfile                             — для Railway/Heroku-подобных 
 
 ## Хостинг: Render (Free Web Service, режим webhook)
 
-* Автодеплой: каждый `git push` в ветку `main` запускает новый деплой.
+* Сервис: https://testtelegrambot-ag9s.onrender.com (health: `/health`).
+* Автодеплой: каждый `git push` в ветку `main` запускает новый деплой (Auto-Deploy: On Commit).
+  GitHub Actions (`.github/workflows/deploy.yml`) дополнительно проверяет, что код собирается.
 * Переменные: `BOT_TOKEN` (вручную, секрет), `WEBHOOK_SECRET` (генерируется), `BOT_MODE=webhook`.
 * `RENDER_EXTERNAL_URL` Render задаёт сам — по нему бот регистрирует webhook.
 * Бесплатный инстанс засыпает через 15 мин без запросов; первое сообщение будит его (~30–60 с задержки).
