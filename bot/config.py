@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -52,7 +53,10 @@ def load_config() -> Config:
     if mode not in {"polling", "webhook"}:
         raise ConfigError("BOT_MODE должен быть 'polling' или 'webhook'.")
 
-    secret = os.getenv("WEBHOOK_SECRET", "").strip()
+    raw_secret = os.getenv("WEBHOOK_SECRET", "").strip()
+    # Telegram допускает в secret_token только A-Z a-z 0-9 _ - (1..256 символов),
+    # а Render генерирует base64. Приводим к hex SHA-256 — стабильно и всегда валидно.
+    secret = hashlib.sha256(raw_secret.encode()).hexdigest() if raw_secret else ""
     if mode == "webhook":
         if not base_url:
             raise ConfigError("Для режима webhook нужен WEBHOOK_BASE_URL (или RENDER_EXTERNAL_URL).")

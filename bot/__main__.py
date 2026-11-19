@@ -85,6 +85,11 @@ def run_webhook(config: Config) -> None:
 
     dp.startup.register(startup_webhook)
 
+    async def close_session(bot: Bot) -> None:
+        await bot.session.close()
+
+    dp.shutdown.register(close_session)
+
     async def health(_: web.Request) -> web.Response:
         return web.json_response({"status": "ok", "version": __version__})
 

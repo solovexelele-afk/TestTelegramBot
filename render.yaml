@@ -1,5 +1,7 @@
 # Render Blueprint: https://render.com/docs/blueprint-spec
-# Бесплатный Web Service в режиме webhook. Автодеплой при каждом push в main.
+# Бесплатный Web Service в режиме webhook.
+# Автодеплой: GitHub Actions (.github/workflows/deploy.yml) вызывает Render Deploy Hook
+# при каждом push в main (репозиторий подключён к Render как публичный URL).
 services:
   - type: web
     name: testtelegrambot
