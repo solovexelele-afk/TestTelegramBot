@@ -7,24 +7,65 @@ from html import escape
 
 from aiogram.types import Chat, User
 
+from bot.services.personas import PERSONAS
+
 
 def start_text(user: User) -> str:
     return (
         f"👋 Привет, <b>{escape(user.first_name)}</b>!\n\n"
-        "Я — <b>TestTelegramBot</b>, тестовый бот на <i>aiogram 3</i>.\n"
-        "Выберите действие кнопками ниже или воспользуйтесь командами.\n\n"
-        "📋 /help — список команд"
+        "Я — бот-друг с ИИ. Что умею:\n"
+        "💬 <b>Болтать</b> — просто пиши мне, как другу, я помню наш диалог\n"
+        "🎨 <b>Рисовать</b> — опиши картинку, и я её сгенерирую\n"
+        "👥 <b>Следить за группой</b> — антиспам, приветствия, розыгрыши, статистика\n"
+        "💼 <b>Автоответчик</b> — отвечаю за тебя в личке через Telegram Business\n\n"
+        "Всё бесплатно. Список команд — /help"
     )
 
 
 HELP_TEXT = (
-    "📖 <b>Доступные команды</b>\n\n"
-    "/start — приветствие и главное меню\n"
-    "/help — эта справка\n"
-    "/id — ваш Telegram ID и ID чата\n"
-    "/profile — информация о вашем профиле\n\n"
-    "💡 Также можно пользоваться кнопками внизу экрана."
+    "📖 <b>Команды</b>\n\n"
+    "<b>Личный чат</b>\n"
+    "просто текст — общение с ИИ\n"
+    "/img <i>описание</i> — сгенерировать картинку\n"
+    "/persona — выбрать характер ИИ\n"
+    "/reset — забыть диалог\n"
+    "/profile — профиль, /id — ваш ID\n"
+    "/business — настройки автоответчика\n\n"
+    "<b>В группе</b> (боту нужны права администратора)\n"
+    "обращение «@бот …» или ответ на сообщение бота — ИИ-ответ\n"
+    "/settings — включить/выключить функции\n"
+    "/warn, /mute [мин], /unmute, /ban — ответом на сообщение\n"
+    "/stats — топ активных участников\n"
+    "/giveaway [победителей] приз — розыгрыш\n"
+    "/img <i>описание</i> — картинка прямо в чат"
 )
+
+GROUPS_TEXT = (
+    "👥 <b>Бот для группы</b>\n\n"
+    "1. Добавьте меня в группу.\n"
+    "2. Сделайте администратором (удаление сообщений и блокировка участников).\n"
+    "3. Напишите в группе /settings.\n\n"
+    "Что я делаю: приветствую новых участников, удаляю ссылки от обычных участников, "
+    "глушу флудеров, выдаю предупреждения, провожу розыгрыши, считаю активность "
+    "и отвечаю с ИИ, если ко мне обратиться."
+)
+
+BUSINESS_HOWTO = (
+    "💼 <b>Автоответчик через Telegram Business</b>\n\n"
+    "Нужен <b>Telegram Premium</b> на вашем аккаунте.\n"
+    "1. Настройки → <b>Telegram для бизнеса</b> → <b>Чат-боты</b>.\n"
+    "2. Введите имя этого бота и выберите, в каких чатах он отвечает.\n"
+    "3. Разрешите боту <b>отвечать на сообщения</b>.\n\n"
+    "После подключения я пришлю сюда настройки: ИИ-ответы или шаблон, инструкции, "
+    "пауза, если вы сами ответили в чате."
+)
+
+IMAGE_ASK = "🎨 Опишите картинку одним сообщением. Например: <i>кот-космонавт на Марсе, стиль аниме</i>"
+IMAGE_WAIT = "🎨 Рисую… обычно это 10–30 секунд"
+IMAGE_FAIL = "😔 Не получилось нарисовать. Попробуйте ещё раз или измените описание."
+AI_FAIL = "😔 ИИ сейчас перегружен. Попробуйте через минуту."
+ERROR_TEXT = "⚠️ Произошла ошибка. Попробуйте ещё раз чуть позже."
+NON_TEXT = "Я пока понимаю только текст 🙂 Напиши словами!"
 
 
 def id_text(user: User, chat: Chat) -> str:
@@ -37,22 +78,35 @@ def id_text(user: User, chat: Chat) -> str:
     )
 
 
-def profile_text(user: User, first_seen: datetime | None) -> str:
+def profile_text(user: User, first_seen: datetime | None, persona: str, provider: str) -> str:
     username = f"@{escape(user.username)}" if user.username else "—"
-    full_name = escape(user.full_name)
-    lang = escape(user.language_code or "—")
     premium = "✅ да" if user.is_premium else "❌ нет"
     seen = first_seen.strftime("%d.%m.%Y %H:%M UTC") if first_seen else "—"
+    persona_title = PERSONAS.get(persona, PERSONAS["bro"])[0]
     return (
         "👤 <b>Ваш профиль</b>\n\n"
-        f"<b>Имя:</b> {full_name}\n"
+        f"<b>Имя:</b> {escape(user.full_name)}\n"
         f"<b>Username:</b> {username}\n"
         f"<b>ID:</b> <code>{user.id}</code>\n"
-        f"<b>Язык:</b> {lang}\n"
+        f"<b>Язык:</b> {escape(user.language_code or '—')}\n"
         f"<b>Telegram Premium:</b> {premium}\n"
-        f"<b>Первый запуск бота:</b> {seen}"
+        f"<b>С ботом с:</b> {seen}\n"
+        f"<b>Характер ИИ:</b> {persona_title}\n"
+        f"<b>Нейросеть:</b> {escape(provider)}"
     )
 
 
-ERROR_TEXT = "⚠️ Произошла ошибка. Попробуйте ещё раз чуть позже."
-UNKNOWN_TEXT = "🤔 Я не знаю такой команды. Нажмите /help, чтобы увидеть список."
+def business_status(b) -> str:  # b: BusinessConn | None
+    if b is None:
+        return BUSINESS_HOWTO
+    modes = {"ai": "🤖 ИИ отвечает за вас", "away": "📝 отправляется шаблон", "off": "⏸ выключен"}
+    reply = "✅" if b.can_reply else "❌ (разрешите в настройках Telegram Business)"
+    instr = escape(b.instructions) if b.instructions else "<i>не заданы</i>"
+    return (
+        "💼 <b>Автоответчик подключён</b>\n\n"
+        f"<b>Режим:</b> {modes.get(b.mode, b.mode)}\n"
+        f"<b>Право отвечать:</b> {reply}\n"
+        f"<b>Пауза:</b> не отвечаю {b.pause_minutes} мин после вашего сообщения в чате\n"
+        f"<b>Шаблон:</b> {escape(b.away_text)}\n"
+        f"<b>Инструкции для ИИ:</b> {instr}"
+    )

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -21,9 +21,29 @@ class ConfigError(RuntimeError):
 
 def _get_bool(name: str, default: bool = False) -> bool:
     value = os.getenv(name)
-    if value is None:
+    if value is None or value.strip() == "":
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _get_ids(name: str) -> frozenset[int]:
+    raw = os.getenv(name, "")
+    return frozenset(int(x) for x in raw.replace(";", ",").split(",") if x.strip().lstrip("-").isdigit())
+
+
+def _database_url() -> str:
+    url = os.getenv("DATABASE_URL", "").strip()
+    if not url:
+        return f"sqlite+aiosqlite:///{(BASE_DIR / 'data' / 'bot.db').as_posix()}"
+    # Neon/Render/Supabase выдают postgres:// или postgresql:// — переводим на async-драйвер.
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            url = "postgresql+asyncpg://" + url[len(prefix):]
+            break
+    # asyncpg не понимает sslmode/channel_binding из строки подключения Neon.
+    if url.startswith("postgresql+asyncpg://") and "?" in url:
+        url = url.split("?", 1)[0]
+    return url
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,6 +58,14 @@ class Config:
     webhook_secret: str
     host: str
     port: int
+    keep_alive: bool
+    # данные
+    database_url: str
+    admin_ids: frozenset[int] = field(default_factory=frozenset)
+    # ИИ
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-flash-latest"
+    history_limit: int = 20
 
 
 def load_config() -> Config:
@@ -73,4 +101,10 @@ def load_config() -> Config:
         webhook_secret=secret,
         host=os.getenv("HOST", "0.0.0.0"),
         port=int(os.getenv("PORT", "8080")),
+        keep_alive=_get_bool("KEEP_ALIVE", default=False),
+        database_url=_database_url(),
+        admin_ids=_get_ids("ADMIN_IDS"),
+        gemini_api_key=os.getenv("GEMINI_API_KEY", "").strip(),
+        gemini_model=os.getenv("GEMINI_MODEL", "").strip() or "gemini-flash-latest",
+        history_limit=int(os.getenv("AI_HISTORY_LIMIT", "20")),
     )

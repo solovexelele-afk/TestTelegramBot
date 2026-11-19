@@ -1,18 +1,15 @@
-"""Глобальный обработчик ошибок."""
+"""Глобальный обработчик ошибок (регистрируется на корневом роутере)."""
 
 import logging
 from contextlib import suppress
 
-from aiogram import Router
 from aiogram.types import ErrorEvent
 
 from bot import texts
 
-router = Router(name="errors")
 logger = logging.getLogger(__name__)
 
 
-@router.error()
 async def on_error(event: ErrorEvent) -> bool:
     logger.exception("Ошибка при обработке апдейта %s", event.update.update_id, exc_info=event.exception)
 
