@@ -1,0 +1,24 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+# Бесплатный Web Service в режиме webhook. Автодеплой при каждом push в main.
+services:
+  - type: web
+    name: testtelegrambot
+    runtime: python
+    plan: free
+    region: frankfurt
+    branch: main
+    autoDeploy: true
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m bot
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.10
+      - key: BOT_MODE
+        value: webhook
+      - key: LOG_LEVEL
+        value: INFO
+      - key: WEBHOOK_SECRET
+        generateValue: true
+      - key: BOT_TOKEN
+        sync: false   # секрет: вводится вручную в панели Render
