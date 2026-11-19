@@ -22,5 +22,11 @@ services:
         value: INFO
       - key: WEBHOOK_SECRET
         generateValue: true
+      - key: KEEP_ALIVE
+        value: "true"   # самопинг /health каждые 10 мин — бесплатный инстанс не засыпает
       - key: BOT_TOKEN
         sync: false   # секрет: вводится вручную в панели Render
+      - key: GEMINI_API_KEY
+        sync: false   # секрет: бесплатный ключ с aistudio.google.com/apikey
+      # DATABASE_URL (необязательно): PostgreSQL, например бесплатный Neon —
+      # без него используется SQLite, который очищается при каждом деплое.

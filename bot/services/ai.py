@@ -24,14 +24,18 @@ class AIError(RuntimeError):
 
 
 class AIService:
-    def __init__(self, gemini_api_key: str, gemini_model: str) -> None:
-        self.gemini_model = gemini_model
-        self._gemini = genai.Client(api_key=gemini_api_key) if gemini_api_key else None
+    def __init__(self, gemini_api_key: str, gemini_models: str) -> None:
+        self.models = [m.strip() for m in gemini_models.split(",") if m.strip()]
+        self._gemini = genai.Client(api_key=gemini_api_key) if gemini_api_key and self.models else None
         self._http: aiohttp.ClientSession | None = None
+        self._working: str | None = None  # последняя модель, которая ответила
+        self._no_thinking: set[str] = set()  # модели, не принимающие thinking_level
 
     @property
     def provider(self) -> str:
-        return f"Gemini ({self.gemini_model})" if self._gemini else "Pollinations (без ключа)"
+        if not self._gemini:
+            return "Pollinations (без ключа)"
+        return f"Gemini ({self._working or self.models[0]})"
 
     async def _session(self) -> aiohttp.ClientSession:
         if self._http is None or self._http.closed:
@@ -52,23 +56,41 @@ class AIService:
         return await self._chat_pollinations(system, history)
 
     async def _chat_gemini(self, system: str, history: list[tuple[str, str]], max_tokens: int) -> str:
+        # сначала модель, которая отвечала последней, затем остальные по порядку
+        order = ([self._working] if self._working else []) + [m for m in self.models if m != self._working]
+        last_exc: Exception | None = None
+        for model in order:
+            try:
+                text = await self._gemini_once(model, system, history, max_tokens)
+                self._working = model
+                return text
+            except (AIError, asyncio.TimeoutError) as exc:
+                logger.warning("Gemini %s: %s", model, exc)
+                last_exc = exc
+        raise AIError(f"Все модели Gemini недоступны: {last_exc}")
+
+    async def _gemini_once(self, model: str, system: str, history: list[tuple[str, str]], max_tokens: int) -> str:
         contents = [
             types.Content(role="model" if role == "model" else "user", parts=[types.Part.from_text(text=text)])
             for role, text in history
         ]
+        use_thinking = model not in self._no_thinking
         config = types.GenerateContentConfig(
             system_instruction=system,
-            max_output_tokens=max_tokens,
+            max_output_tokens=max_tokens + (1024 if use_thinking else 0),
             temperature=0.9,
+            # для переписки долгие размышления не нужны — так ответ приходит быстрее
+            thinking_config=types.ThinkingConfig(thinking_level="LOW") if use_thinking else None,
         )
         try:
             resp = await asyncio.wait_for(
-                self._gemini.aio.models.generate_content(
-                    model=self.gemini_model, contents=contents, config=config
-                ),
-                timeout=60,
+                self._gemini.aio.models.generate_content(model=model, contents=contents, config=config),
+                timeout=25,
             )
         except genai_errors.APIError as exc:
+            if exc.code == 400 and use_thinking and "think" in str(exc.message).lower():
+                self._no_thinking.add(model)
+                return await self._gemini_once(model, system, history, max_tokens)
             raise AIError(f"Gemini API error {exc.code}: {exc.message}") from exc
         text = (resp.text or "").strip()
         if not text:

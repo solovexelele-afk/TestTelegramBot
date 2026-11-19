@@ -15,6 +15,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 
+# Модели пробуются по очереди: если первая перегружена/недоступна — берётся следующая.
+# lite-модели быстрые (~1 с) и редко перегружены на бесплатном тарифе.
+DEFAULT_GEMINI_MODELS = "gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-3.8-flash,gemini-3.5-flash"
+
+
 class ConfigError(RuntimeError):
     """Ошибка конфигурации (например, не задан токен)."""
 
@@ -64,7 +69,7 @@ class Config:
     admin_ids: frozenset[int] = field(default_factory=frozenset)
     # ИИ
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-flash-latest"
+    gemini_model: str = ""
     history_limit: int = 20
 
 
@@ -105,6 +110,6 @@ def load_config() -> Config:
         database_url=_database_url(),
         admin_ids=_get_ids("ADMIN_IDS"),
         gemini_api_key=os.getenv("GEMINI_API_KEY", "").strip(),
-        gemini_model=os.getenv("GEMINI_MODEL", "").strip() or "gemini-flash-latest",
+        gemini_model=os.getenv("GEMINI_MODEL", "").strip() or DEFAULT_GEMINI_MODELS,
         history_limit=int(os.getenv("AI_HISTORY_LIMIT", "20")),
     )

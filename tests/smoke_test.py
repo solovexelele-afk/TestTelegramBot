@@ -53,7 +53,12 @@ async def main() -> None:
     await db.close()
     print("db: OK")
 
-    ai = AIService(os.getenv("GEMINI_API_KEY", ""), os.getenv("GEMINI_MODEL", "gemini-flash-latest"))
+    from dotenv import load_dotenv
+
+    from bot.config import DEFAULT_GEMINI_MODELS
+
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+    ai = AIService(os.getenv("GEMINI_API_KEY", ""), os.getenv("GEMINI_MODEL") or DEFAULT_GEMINI_MODELS)
     print("ai provider:", ai.provider)
     answer = await ai.chat(persona_prompt("bro", "Тест"), [("user", "Привет! Скажи одно короткое предложение.")])
     print("ai answer:", answer[:200])
