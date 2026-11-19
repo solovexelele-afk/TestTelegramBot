@@ -17,7 +17,7 @@ from aiogram.utils.chat_action import ChatActionSender
 from bot import keyboards as kb
 from bot import texts
 from bot.services.ai import AIService
-from bot.services.images import ImageError, generate_image
+from bot.services.images import ImageError, estimated_wait, generate_image
 
 router = Router(name="draw")
 logger = logging.getLogger(__name__)
@@ -31,7 +31,9 @@ class DrawState(StatesGroup):
 
 
 async def _draw(bot: Bot, chat_id: int, user_id: int, prompt: str, ai: AIService, reply_to: int | None = None) -> None:
-    status = await bot.send_message(chat_id, texts.IMAGE_WAIT, reply_to_message_id=reply_to)
+    wait = estimated_wait()
+    note = texts.IMAGE_WAIT if wait < 10 else f"🎨 Поставил в очередь, рисую через ~{wait} сек (бесплатный лимит)…"
+    status = await bot.send_message(chat_id, note, reply_to_message_id=reply_to)
     try:
         async with ChatActionSender.upload_photo(bot=bot, chat_id=chat_id):
             en_prompt = await ai.to_image_prompt(prompt)

@@ -18,9 +18,9 @@ from bot import keyboards as kb
 from bot import texts
 from bot.config import Config
 from bot.db import Database
-from bot.handlers.ai_chat import split_text
+from bot.handlers.ai_chat import send_like_human
 from bot.services.ai import AIError, AIService
-from bot.services.personas import business_prompt
+from bot.services.personas import business_prompt, humanize
 
 router = Router(name="business")
 logger = logging.getLogger(__name__)
@@ -103,9 +103,9 @@ async def on_business_message(message: Message, bot: Bot, db: Database, ai: AISe
         answer = await ai.chat(business_prompt(b.owner_name, b.instructions), history, max_tokens=500)
     except AIError:
         return
-    await db.add_dialog(scope, "model", answer, keep=40)
-    for part in split_text(answer):
-        await bot.send_message(message.chat.id, part, business_connection_id=conn_id, parse_mode=None)
+    parts = humanize(answer, max_parts=3)
+    await db.add_dialog(scope, "model", "\n".join(parts), keep=40)
+    await send_like_human(bot, message.chat.id, parts, business_connection_id=conn_id)
 
 
 # ---------- настройки в личке с ботом ----------

@@ -6,6 +6,7 @@ import asyncio
 import logging
 import time
 from collections import defaultdict
+from contextlib import suppress
 
 from aiogram import Bot, F, Router
 from aiogram.enums import ChatType
@@ -17,7 +18,7 @@ from bot import texts
 from bot.config import Config
 from bot.db import Database
 from bot.services.ai import AIError, AIService
-from bot.services.personas import persona_prompt
+from bot.services.personas import humanize, persona_prompt
 
 router = Router(name="ai_chat")
 router.message.filter(F.chat.type == ChatType.PRIVATE)
@@ -74,10 +75,22 @@ async def chat(message: Message, bot: Bot, db: Database, ai: AIService, config: 
         except AIError:
             await message.answer(texts.AI_FAIL)
             return
-        await db.add_dialog(scope, "model", answer)
+        parts = humanize(answer)
+        # в историю — уже «очеловеченный» текст, чтобы модель держала стиль
+        await db.add_dialog(scope, "model", "\n".join(parts))
 
-    for part in split_text(answer):
-        await message.answer(part, parse_mode=None)
+    await send_like_human(bot, message.chat.id, parts)
+
+
+async def send_like_human(bot: Bot, chat_id: int, parts: list[str], **kwargs) -> None:
+    """Шлёт несколько коротких сообщений подряд с «печатает…» между ними, как живой человек."""
+    for i, part in enumerate(parts):
+        if i:
+            with suppress(Exception):
+                await bot.send_chat_action(chat_id, "typing", **kwargs)
+            await asyncio.sleep(min(0.6 + len(part) * 0.03, 2.5))
+        for chunk in split_text(part):
+            await bot.send_message(chat_id, chunk, parse_mode=None, **kwargs)
 
 
 @router.message(F.text.startswith("/"))

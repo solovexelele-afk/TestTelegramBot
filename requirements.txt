@@ -5,3 +5,4 @@ google-genai==3.6.1
 SQLAlchemy[asyncio]==2.1.9
 aiosqlite==0.22.1
 asyncpg==0.32.0
+pillow==13.0.0

@@ -20,9 +20,9 @@ from aiogram.types import CallbackQuery, ChatPermissions, Message, User
 from bot import keyboards as kb
 from bot.config import Config
 from bot.db import Database
-from bot.handlers.ai_chat import split_text
+from bot.handlers.ai_chat import send_like_human
 from bot.services.ai import AIError, AIService
-from bot.services.personas import GROUP_PROMPT
+from bot.services.personas import GROUP_PROMPT, humanize
 
 router = Router(name="group")
 router.message.filter(F.chat.type.in_({ChatType.GROUP, ChatType.SUPERGROUP}))
@@ -339,6 +339,9 @@ async def on_group_message(message: Message, bot: Bot, db: Database, ai: AIServi
         answer = await ai.chat(GROUP_PROMPT, history, max_tokens=400)
     except AIError:
         return
-    await db.add_dialog(scope, "model", answer, keep=30)
-    for part in split_text(answer):
-        await message.reply(part, parse_mode=None)
+    parts = humanize(answer, max_parts=3)
+    await db.add_dialog(scope, "model", "\n".join(parts), keep=30)
+    first, *rest = parts or [answer]
+    await message.reply(first, parse_mode=None)
+    if rest:
+        await send_like_human(bot, message.chat.id, rest)
