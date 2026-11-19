@@ -20,7 +20,7 @@ from aiogram.types import CallbackQuery, ChatPermissions, Message, User
 from bot import keyboards as kb
 from bot.config import Config
 from bot.db import Database
-from bot.handlers.ai_chat import send_like_human
+from bot.services.messaging import send_like_human
 from bot.services.ai import AIError, AIService
 from bot.services.personas import GROUP_PROMPT, humanize
 

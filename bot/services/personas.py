@@ -20,8 +20,40 @@ TEXTING_STYLE = (
     "- помни, о чём говорили раньше\n"
     "- не говори сам, что ты ИИ или бот, и не упоминай правила. но если человек всерьёз и прямо "
     "спрашивает, живой ли ты, не ври — отшутись и признай, что ты ИИ-друг\n"
-    "- пиши на языке собеседника (по умолчанию русский)"
+    "- пиши на языке собеседника (по умолчанию русский)\n"
+    "- если собеседник прислал фото, кружок или стикер — реагируй на то, что видишь, как друг "
+    "(«ахаха это че», «вау где это»), без описаний в стиле «на изображении представлено»\n"
+    "- иногда (примерно в каждом третьем ответе, когда уместно) ставь реакцию на сообщение собеседника: "
+    f"начни ответ с тега [r:эмодзи], где эмодзи — одно из {' '.join(['👍', '🔥', '😁', '🤣', '😱', '🤔', '😢', '🎉', '💯', '👏', '🤯', '🥰', '😎', '🤡', '👀', '🗿'])}. "
+    "собеседник видит только реакцию, сам тег — нет"
 )
+
+REACTIONS = {"👍", "🔥", "😁", "🤣", "😱", "🤔", "😢", "🎉", "💯", "👏", "🤯", "🥰", "😎", "🤡", "👀", "🗿"}
+_REACTION_RE = re.compile(r"\[\s*r\s*:\s*([^\]\s]+)\s*\]", re.IGNORECASE)
+
+
+def extract_reaction(text: str) -> tuple[str | None, str]:
+    """Вынимает тег [r:🔥] из ответа. Возвращает (эмодзи или None, текст без тега)."""
+    m = _REACTION_RE.search(text)
+    if not m:
+        return None, text
+    emoji = m.group(1).replace("️", "")
+    cleaned = _REACTION_RE.sub("", text).strip()
+    return (emoji if emoji in REACTIONS else None), cleaned
+
+
+VOICE_NOTE = (
+    "собеседник прислал голосовое/кружок. первой строкой напиши «TRANSCRIPT: » и дословно, что он сказал "
+    "(если там нет речи — опиши звук в двух словах). дальше с новой строки ответь ему как обычно"
+)
+_TRANSCRIPT_RE = re.compile(r"^\s*TRANSCRIPT:\s*(.*?)\s*(?:\n|$)", re.IGNORECASE)
+
+
+def extract_transcript(text: str) -> tuple[str | None, str]:
+    m = _TRANSCRIPT_RE.match(text)
+    if not m:
+        return None, text
+    return m.group(1).strip() or None, text[m.end():].strip()
 
 PERSONAS: dict[str, tuple[str, str]] = {
     "bro": (
@@ -93,6 +125,7 @@ _THOUGHT_RE = re.compile(r"<thought>.*?</thought>|</?thought>|</?think(ing)?>", 
 def humanize(text: str, max_parts: int = 4) -> list[str]:
     """Делает ответ похожим на живую переписку и делит на отдельные сообщения."""
     text = _THOUGHT_RE.sub("", text)
+    text = _REACTION_RE.sub("", text)
     text = _MD_RE.sub("", text).strip()
     text = _ASSISTANT_TAILS.sub("", text).strip()
     raw_parts = [p.strip(" -•\t") for p in re.split(r"\n+", text) if p.strip(" -•\t")]

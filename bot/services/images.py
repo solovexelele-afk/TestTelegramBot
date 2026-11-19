@@ -39,6 +39,24 @@ class ImageError(RuntimeError):
     pass
 
 
+_VERTICAL_RE = re.compile(
+    r"\b(вертикальн\w*|на телефон|обои на телефон|для телефона|сторис|stories|портретн\w*|9[:x×]16)\b", re.IGNORECASE
+)
+_HORIZONTAL_RE = re.compile(
+    r"\b(горизонтальн\w*|широк\w*|на (пк|комп\w*|рабочий стол)|для (пк|компа)|16[:x×]9|баннер\w*|обложк\w*)\b",
+    re.IGNORECASE,
+)
+
+
+def detect_format(prompt: str) -> tuple[int, int, str]:
+    """Определяет формат по словам в запросе. Возвращает (ширина, высота, название)."""
+    if _VERTICAL_RE.search(prompt):
+        return 768, 1344, "вертикальная 9:16"
+    if _HORIZONTAL_RE.search(prompt):
+        return 1344, 768, "горизонтальная 16:9"
+    return 1024, 1024, "квадрат"
+
+
 def _api_key() -> str:
     return os.getenv("POLLINATIONS_API_KEY", "").strip()
 

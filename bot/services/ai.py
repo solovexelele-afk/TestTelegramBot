@@ -46,22 +46,42 @@ class AIService:
         if self._http and not self._http.closed:
             await self._http.close()
 
-    async def chat(self, system: str, history: list[tuple[str, str]], max_tokens: int = 1024) -> str:
-        """history: [(role, text)], role = 'user' | 'model'. Последний элемент — новое сообщение."""
+    @property
+    def can_see(self) -> bool:
+        """Понимает ли ИИ фото и голосовые (только Gemini)."""
+        return self._gemini is not None
+
+    async def chat(
+        self,
+        system: str,
+        history: list[tuple[str, str]],
+        max_tokens: int = 1024,
+        media: tuple[bytes, str] | None = None,
+    ) -> str:
+        """history: [(role, text)], role = 'user' | 'model'. Последний элемент — новое сообщение.
+
+        media — (байты, mime-тип) фото или голосового, прикладывается к последнему сообщению.
+        """
         if self._gemini is not None:
             try:
-                return await self._chat_gemini(system, history, max_tokens)
+                return await self._chat_gemini(system, history, max_tokens, media)
             except Exception as exc:  # noqa: BLE001 — любой сбой Gemini → пробуем запасной вариант
+                if media is not None:
+                    raise AIError(f"Gemini не смог обработать вложение: {exc}") from exc
                 logger.warning("Gemini недоступен (%s), переключаюсь на Pollinations", exc)
+        if media is not None:
+            raise AIError("Без ключа Gemini фото и голосовые не поддерживаются")
         return await self._chat_pollinations(system, history)
 
-    async def _chat_gemini(self, system: str, history: list[tuple[str, str]], max_tokens: int) -> str:
+    async def _chat_gemini(
+        self, system: str, history: list[tuple[str, str]], max_tokens: int, media: tuple[bytes, str] | None
+    ) -> str:
         # сначала модель, которая отвечала последней, затем остальные по порядку
         order = ([self._working] if self._working else []) + [m for m in self.models if m != self._working]
         last_exc: Exception | None = None
         for model in order:
             try:
-                text = await self._gemini_once(model, system, history, max_tokens)
+                text = await self._gemini_once(model, system, history, max_tokens, media)
                 self._working = model
                 return text
             except (AIError, asyncio.TimeoutError) as exc:
@@ -69,11 +89,21 @@ class AIService:
                 last_exc = exc
         raise AIError(f"Все модели Gemini недоступны: {last_exc}")
 
-    async def _gemini_once(self, model: str, system: str, history: list[tuple[str, str]], max_tokens: int) -> str:
+    async def _gemini_once(
+        self,
+        model: str,
+        system: str,
+        history: list[tuple[str, str]],
+        max_tokens: int,
+        media: tuple[bytes, str] | None = None,
+    ) -> str:
         contents = [
             types.Content(role="model" if role == "model" else "user", parts=[types.Part.from_text(text=text)])
             for role, text in history
         ]
+        if media is not None and contents:
+            data, mime = media
+            contents[-1].parts.insert(0, types.Part.from_bytes(data=data, mime_type=mime))
         use_thinking = model not in self._no_thinking
         config = types.GenerateContentConfig(
             system_instruction=system,
@@ -85,12 +115,12 @@ class AIService:
         try:
             resp = await asyncio.wait_for(
                 self._gemini.aio.models.generate_content(model=model, contents=contents, config=config),
-                timeout=25,
+                timeout=40 if media else 25,
             )
         except genai_errors.APIError as exc:
             if exc.code == 400 and use_thinking and "think" in str(exc.message).lower():
                 self._no_thinking.add(model)
-                return await self._gemini_once(model, system, history, max_tokens)
+                return await self._gemini_once(model, system, history, max_tokens, media)
             raise AIError(f"Gemini API error {exc.code}: {exc.message}") from exc
         text = (resp.text or "").strip()
         if not text:
