@@ -104,8 +104,26 @@ def business_inline(mode: str, pause: int) -> InlineKeyboardMarkup:
     kb.button(text=f"{mark('ai')}🤖 ИИ-ответы", callback_data="biz:mode:ai")
     kb.button(text=f"{mark('away')}📝 Шаблон", callback_data="biz:mode:away")
     kb.button(text=f"{mark('off')}⏸ Выключить", callback_data="biz:mode:off")
+    kb.button(text="🧬 Мой стиль", callback_data="biz:style")
     kb.button(text="✏️ Текст шаблона", callback_data="biz:away_text")
-    kb.button(text="🧾 Инструкции для ИИ", callback_data="biz:instructions")
+    kb.button(text="🧾 О себе для ИИ", callback_data="biz:instructions")
     kb.button(text=f"⏱ Пауза после вас: {pause} мин", callback_data="biz:pause")
-    kb.adjust(3, 2, 1)
+    kb.adjust(3, 1, 2, 1)
+    return kb.as_markup()
+
+
+def style_only_inline() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🧬 Мой стиль", callback_data="biz:style")
+    kb.button(text="⬅️ В меню", callback_data="menu:start")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def style_inline(has_samples: bool) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    if has_samples:
+        kb.button(text="🗑 Забыть мой стиль", callback_data="biz:style_reset")
+    kb.button(text="⬅️ Назад", callback_data="menu:business")
+    kb.adjust(1)
     return kb.as_markup()

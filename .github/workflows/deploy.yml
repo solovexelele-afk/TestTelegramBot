@@ -21,3 +21,4 @@ jobs:
           python -m compileall -q bot
           python -c "from bot.__main__ import build_dispatcher; build_dispatcher()"
           python tests/test_text_logic.py
+          python tests/test_style.py

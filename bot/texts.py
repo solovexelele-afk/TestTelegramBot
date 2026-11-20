@@ -102,10 +102,46 @@ def profile_text(user: User, first_seen: datetime | None, persona: str, provider
     )
 
 
-def business_status(b) -> str:  # b: BusinessConn | None
+STYLE_HOWTO = (
+    "📥 <b>Как научить меня твоему стилю</b>\n\n"
+    "1. Открой <b>Telegram Desktop</b> на компьютере.\n"
+    "2. Зайди в переписку с другом, где ты много пишешь → ⋮ → <b>Экспорт истории чата</b>.\n"
+    "3. Сними все галочки с фото/видео/файлов, формат — <b>JSON</b> (машиночитаемый), нажми «Экспортировать».\n"
+    "4. Пришли сюда файл <code>result.json</code> из папки экспорта.\n\n"
+    "Можно прислать несколько чатов — чем больше твоих сообщений, тем точнее копия. "
+    "Ещё я учусь сам: каждое сообщение, которое ты пишешь в подключённых чатах, запоминаю как образец.\n\n"
+    "🔒 Я сохраняю только тексты твоих сообщений и фразы, на которые ты отвечал. "
+    "Сбросить всё — кнопка «Забыть мой стиль»."
+)
+STYLE_NOT_JSON = "Пришли файл <code>result.json</code> — экспорт чата из Telegram Desktop в формате JSON.\n\n" + STYLE_HOWTO
+STYLE_TOO_BIG = (
+    "Файл больше 20 МБ — Telegram не даёт ботам скачивать такие. "
+    "Экспортируй один-два чата без медиа, они весят меньше."
+)
+STYLE_NO_OWN = (
+    "😕 В этом файле не нашлось твоих сообщений. Проверь, что это экспорт именно твоего аккаунта "
+    "и личной переписки в формате JSON.\n\n" + STYLE_HOWTO
+)
+
+
+def style_status(count: int, profile: str) -> str:
+    if count == 0:
+        return "🧬 <b>Мой стиль</b>\n\nЯ пока не знаю, как ты пишешь.\n\n" + STYLE_HOWTO
+    desc = escape(profile) if profile else "<i>описание появится, когда наберётся хотя бы 10 сообщений</i>"
+    return (
+        f"🧬 <b>Мой стиль</b>\n\nИзучено твоих сообщений: <b>{count}</b>\n\n"
+        f"<b>Как ты пишешь:</b>\n{desc}\n\n"
+        "Можешь прислать ещё экспорт чата (<code>result.json</code>), чтобы копия была точнее."
+    )
+
+
+def business_status(b, style_count: int = 0) -> str:  # b: BusinessConn | None
+    style_line = f"\n\n🧬 Изучено твоих сообщений: <b>{style_count}</b>" if style_count else (
+        "\n\n🧬 Стиль ещё не изучен — нажми «Мой стиль», чтобы я писал как ты"
+    )
     if b is None:
-        return BUSINESS_HOWTO
-    modes = {"ai": "🤖 ИИ отвечает за вас", "away": "📝 отправляется шаблон", "off": "⏸ выключен"}
+        return BUSINESS_HOWTO + style_line
+    modes = {"ai": "🤖 ИИ отвечает как вы, от вашего имени", "away": "📝 отправляется шаблон", "off": "⏸ выключен"}
     reply = "✅" if b.can_reply else "❌ (разрешите в настройках Telegram Business)"
     instr = escape(b.instructions) if b.instructions else "<i>не заданы</i>"
     return (
@@ -114,5 +150,6 @@ def business_status(b) -> str:  # b: BusinessConn | None
         f"<b>Право отвечать:</b> {reply}\n"
         f"<b>Пауза:</b> не отвечаю {b.pause_minutes} мин после вашего сообщения в чате\n"
         f"<b>Шаблон:</b> {escape(b.away_text)}\n"
-        f"<b>Инструкции для ИИ:</b> {instr}"
+        f"<b>Что ИИ знает о тебе:</b> {instr}"
+        f"{style_line}"
     )

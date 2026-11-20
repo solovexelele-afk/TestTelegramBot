@@ -105,6 +105,30 @@ class OwnerActivity(Base):
     last: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class StyleSample(Base):
+    """Образец стиля владельца: его сообщение (me) и, если есть, на что он отвечал (them)."""
+
+    __tablename__ = "style_samples"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    owner_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    them: Mapped[str] = mapped_column(Text, default="")
+    me: Mapped[str] = mapped_column(Text)
+    created: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class StyleProfile(Base):
+    """Краткое описание стиля владельца, составленное ИИ по образцам."""
+
+    __tablename__ = "style_profiles"
+    owner_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    text: Mapped[str] = mapped_column(Text, default="")
+    samples_at: Mapped[int] = mapped_column(Integer, default=0)  # сколько образцов было при составлении
+    updated: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+STYLE_KEEP = 800  # сколько последних образцов храним на владельца
+
+
 class Database:
     def __init__(self, url: str) -> None:
         if url.startswith("sqlite"):
@@ -310,3 +334,71 @@ class Database:
         async with self.session() as s:
             a = await s.get(OwnerActivity, (conn_id, chat_id))
             return a is not None and utcnow() - a.last < timedelta(minutes=minutes)
+
+    # ---------- стиль владельца ----------
+    async def add_style_samples(self, owner_id: int, items: list[tuple[str, str]]) -> int:
+        """items: [(them, me)]. Возвращает, сколько всего образцов у владельца."""
+        async with self.session() as s:
+            for them, me in items:
+                s.add(StyleSample(owner_id=owner_id, them=(them or "")[:500], me=me[:500]))
+            await s.flush()
+            old_ids = (
+                await s.scalars(
+                    select(StyleSample.id)
+                    .where(StyleSample.owner_id == owner_id)
+                    .order_by(StyleSample.id.desc())
+                    .offset(STYLE_KEEP)
+                )
+            ).all()
+            if old_ids:
+                await s.execute(delete(StyleSample).where(StyleSample.id.in_(old_ids)))
+            await s.commit()
+            return int(
+                await s.scalar(select(func.count()).select_from(StyleSample).where(StyleSample.owner_id == owner_id))
+                or 0
+            )
+
+    async def count_style(self, owner_id: int) -> int:
+        async with self.session() as s:
+            return int(
+                await s.scalar(select(func.count()).select_from(StyleSample).where(StyleSample.owner_id == owner_id))
+                or 0
+            )
+
+    async def style_examples(self, owner_id: int, pairs: int = 25, singles: int = 25) -> list[tuple[str, str]]:
+        """Случайная подборка: пары «им → я» и отдельные сообщения владельца."""
+        async with self.session() as s:
+            with_ctx = (
+                await s.scalars(
+                    select(StyleSample)
+                    .where(StyleSample.owner_id == owner_id, StyleSample.them != "")
+                    .order_by(func.random())
+                    .limit(pairs)
+                )
+            ).all()
+            alone = (
+                await s.scalars(
+                    select(StyleSample)
+                    .where(StyleSample.owner_id == owner_id, StyleSample.them == "")
+                    .order_by(func.random())
+                    .limit(singles)
+                )
+            ).all()
+        return [(x.them, x.me) for x in list(with_ctx) + list(alone)]
+
+    async def clear_style(self, owner_id: int) -> None:
+        async with self.session() as s:
+            await s.execute(delete(StyleSample).where(StyleSample.owner_id == owner_id))
+            await s.execute(delete(StyleProfile).where(StyleProfile.owner_id == owner_id))
+            await s.commit()
+
+    async def style_profile(self, owner_id: int) -> StyleProfile | None:
+        async with self.session() as s:
+            return await s.get(StyleProfile, owner_id)
+
+    async def set_style_profile(self, owner_id: int, text: str, samples_at: int) -> None:
+        async with self.session() as s:
+            p = await s.get(StyleProfile, owner_id) or StyleProfile(owner_id=owner_id)
+            p.text, p.samples_at, p.updated = text[:3000], samples_at, utcnow()
+            s.add(p)
+            await s.commit()
