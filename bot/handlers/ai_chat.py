@@ -22,6 +22,7 @@ from bot.handlers.draw import draw, image_intent
 from bot.services.ai import AIError, AIService
 from bot.services.messaging import bump, is_current, send_like_human
 from bot.services.personas import (
+    MIRROR_PERSONA,
     VOICE_NOTE,
     extract_reaction,
     extract_transcript,
@@ -91,7 +92,12 @@ async def _reply(
         history = await db.history(scope, config.history_limit)
         if media is not None:
             history.append(("user", user_text))
-        system = persona_prompt(user.persona, message.from_user.first_name)
+        profile, examples = "", None
+        if user.persona == MIRROR_PERSONA:
+            p = await db.style_profile(user_id)
+            profile = p.text if p else ""
+            examples = await db.style_examples(user_id)
+        system = persona_prompt(user.persona, message.from_user.first_name, profile, examples)
         if voice:
             system += "\n\n" + VOICE_NOTE
         try:

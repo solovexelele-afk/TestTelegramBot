@@ -113,6 +113,12 @@ async def cb_persona(callback: CallbackQuery, db: Database) -> None:
     if key not in PERSONAS:
         await callback.answer()
         return
+    if key == "me" and await db.count_style(callback.from_user.id) == 0:
+        await callback.answer(
+            "Я ещё не знаю твой стиль. Пришли мне экспорт переписки (result.json) — подробности в /business → 🧬 Мой стиль",
+            show_alert=True,
+        )
+        return
     await db.set_persona(callback.from_user.id, key)
     with suppress(TelegramBadRequest):
         await callback.message.edit_reply_markup(reply_markup=kb.persona_inline(key))

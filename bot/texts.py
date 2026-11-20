@@ -113,7 +113,11 @@ STYLE_HOWTO = (
     "🔒 Я сохраняю только тексты твоих сообщений и фразы, на которые ты отвечал. "
     "Сбросить всё — кнопка «Забыть мой стиль»."
 )
-STYLE_NOT_JSON = "Пришли файл <code>result.json</code> — экспорт чата из Telegram Desktop в формате JSON.\n\n" + STYLE_HOWTO
+STYLE_MIRROR_ON = (
+    "\n\n🪞 Теперь и в обычной переписке со мной я пишу как ты. "
+    "Вернуть другой характер — /persona"
+)
+STYLE_NOT_JSON ="Пришли файл <code>result.json</code> — экспорт чата из Telegram Desktop в формате JSON.\n\n" + STYLE_HOWTO
 STYLE_TOO_BIG = (
     "Файл больше 20 МБ — Telegram не даёт ботам скачивать такие. "
     "Экспортируй один-два чата без медиа, они весят меньше."

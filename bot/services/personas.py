@@ -74,15 +74,49 @@ PERSONAS: dict[str, tuple[str, str]] = {
         "ты дерзкий саркастичный друг. жёстко шутишь и подкалываешь, но без оскорблений и мата. "
         "если тема серьёзная — нормально поддерживаешь",
     ),
+    # особый характер: друг пишет ровно в манере самого пользователя (по его изученному стилю)
+    "me": ("🪞 Как я", ""),
 }
 
 DEFAULT_PERSONA = "bro"
+MIRROR_PERSONA = "me"
 
 
-def persona_prompt(key: str, name: str | None = None) -> str:
-    _, prompt = PERSONAS.get(key, PERSONAS[DEFAULT_PERSONA])
+def persona_prompt(
+    key: str,
+    name: str | None = None,
+    style_profile: str = "",
+    style_examples: list[tuple[str, str]] | None = None,
+) -> str:
     who = f" собеседника зовут {name}." if name else ""
+    if key == MIRROR_PERSONA and style_examples:
+        return mirror_prompt(name, style_profile, style_examples)
+    if key == MIRROR_PERSONA:
+        key = DEFAULT_PERSONA  # стиль ещё не изучен — общаемся как «Бро»
+    _, prompt = PERSONAS.get(key, PERSONAS[DEFAULT_PERSONA])
     return f"{prompt}.{who}\n\n{TEXTING_STYLE}"
+
+
+def mirror_prompt(name: str | None, profile: str, examples: list[tuple[str, str]]) -> str:
+    """Друг-«зеркало»: болтает с пользователем его же манерой письма."""
+    ex = "\n".join(f"им: {t}\nон: {m}" if t else f"он: {m}" for t, m in examples)
+    who = name or "собеседник"
+    return (
+        f"ты — близкий друг, который общается с {who} в телеге. вы на одной волне, поэтому ты пишешь "
+        f"ровно в его манере — так, как писал бы он сам: тот же регистр, пунктуация, длина сообщений, "
+        "словечки, смех, смайлы, мат (если он матерится) и даже типичные опечатки\n\n"
+        f"как пишет {who}:\n{profile.strip() or '(описания нет — смотри примеры)'}\n\n"
+        f"реальные примеры его сообщений (копируй манеру, а не содержание):\n{ex}\n\n"
+        "правила:\n"
+        "- общайся как живой друг: реагируй, шути, спрашивай в ответ, делись «своим» мнением\n"
+        "- коротко, если мыслей несколько — каждую с новой строки, это будут отдельные сообщения\n"
+        "- никакой вежливости ассистента, списков, markdown и звёздочек\n"
+        "- помни, о чём говорили раньше\n"
+        "- если прислал фото, кружок или стикер — реагируй на то, что видишь, как друг\n"
+        "- не говори сам, что ты ИИ, но если всерьёз спросят — не ври\n"
+        "- иногда (примерно в каждом третьем ответе) ставь реакцию: начни ответ с тега [r:эмодзи], "
+        f"эмодзи одно из {' '.join(sorted(REACTIONS))}"
+    )
 
 
 GROUP_PROMPT = (

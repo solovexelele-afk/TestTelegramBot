@@ -22,7 +22,7 @@ from bot.config import Config
 from bot.db import Database
 from bot.services.ai import AIError, AIService
 from bot.services.messaging import send_like_human
-from bot.services.personas import humanize
+from bot.services.personas import MIRROR_PERSONA, humanize
 from bot.services.style import ExportError, as_me_prompt, build_profile, parse_export
 
 router = Router(name="business")
@@ -211,7 +211,10 @@ async def on_export(message: Message, bot: Bot, db: Database, ai: AIService) -> 
     total = await db.add_style_samples(message.from_user.id, samples)
     await status.edit_text(f"🧬 нашёл {len(samples)} твоих сообщений, изучаю стиль…")
     profile = await refresh_profile(db, ai, message.from_user.id, force=True)
-    await status.edit_text(texts.style_status(total, profile), reply_markup=kb.style_inline(True))
+    await db.set_persona(message.from_user.id, MIRROR_PERSONA)  # в обычном чате тоже общаемся «как ты»
+    await status.edit_text(
+        texts.style_status(total, profile) + texts.STYLE_MIRROR_ON, reply_markup=kb.style_inline(True)
+    )
 
 
 @router.callback_query(F.data.startswith("biz:"))
