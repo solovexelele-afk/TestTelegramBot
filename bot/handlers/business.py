@@ -23,7 +23,15 @@ from bot.db import Database
 from bot.services.ai import AIError, AIService
 from bot.services.messaging import send_like_human
 from bot.services.personas import MIRROR_PERSONA, humanize
-from bot.services.style import ExportError, as_me_prompt, build_profile, parse_export
+from bot.services.style import (
+    FAMILY_RE,
+    ExportError,
+    as_me_prompt,
+    asks_if_bot,
+    build_profile,
+    parse_export,
+    strip_disclosure,
+)
 
 router = Router(name="business")
 logger = logging.getLogger(__name__)
@@ -34,6 +42,20 @@ _away_sent: dict[tuple[str, int], float] = {}
 PROFILE_REFRESH_EVERY = 40  # пересобирать описание стиля каждые N новых образцов
 MAX_EXPORT_BYTES = 20 * 1024 * 1024  # больше Bot API скачать не даст
 _bg: set[asyncio.Task] = set()
+DISCLOSE_EVERY_SEC = 3 * 60 * 60  # пометка «автоответчик» — не чаще раза в 3 часа на чат
+SMART_MODELS = ["gemini-3.5-flash", "gemini-3.8-flash"]  # для автоответчика важнее качество, чем скорость
+_disclosed: dict[tuple[str, int], float] = {}
+_owner_username: dict[str, str] = {}
+
+
+async def owner_username(bot: Bot, conn_id: str) -> str:
+    if conn_id not in _owner_username:
+        try:
+            conn = await bot.get_business_connection(conn_id)
+        except TelegramBadRequest:
+            return ""
+        _owner_username[conn_id] = conn.user.username or ""
+    return _owner_username[conn_id]
 
 
 def _spawn(coro) -> None:
@@ -129,21 +151,38 @@ async def on_business_message(message: Message, bot: Bot, db: Database, ai: AISe
     text = message.text or message.caption
     if not text:
         return
-    sender = message.from_user.first_name if message.from_user else "Собеседник"
+    u = message.from_user
+    sender = u.first_name if u else "Собеседник"
+    contact = " ".join(x for x in [u.first_name if u else "", u.last_name if u else ""] if x) or "собеседник"
+    if u and u.username:
+        contact += f" (@{u.username})"
+    previous = await db.history(scope, 4)
     await db.add_dialog(scope, "user", f"{sender}: {text}", keep=40)
     history = await db.history(scope, config.history_limit)
     profile = await db.style_profile(b.owner_id)
-    examples = await db.style_examples(b.owner_id)
-    system = as_me_prompt(b.owner_name, profile.text if profile else "", examples, b.instructions)
+    examples = await db.style_examples(b.owner_id, pairs=45, singles=35)
+    system = as_me_prompt(
+        b.owner_name, profile.text if profile else "", examples, b.instructions,
+        contact=contact, family=bool(FAMILY_RE.search(contact)), first_contact=len(previous) == 0,
+    )
     try:
         with suppress(TelegramBadRequest):
             await bot.send_chat_action(message.chat.id, "typing", business_connection_id=conn_id)
-        answer = await ai.chat(system, history, max_tokens=500)
+        answer = await ai.chat(system, history, max_tokens=400, temperature=0.6, prefer=SMART_MODELS)
     except AIError:
         return
-    parts = humanize(answer, max_parts=3)
+    nick = await owner_username(bot, conn_id)
+    parts = humanize(answer, max_parts=3, lowercase=False)
+    if not asks_if_bot(text):
+        parts = strip_disclosure(parts, nick)  # о себе как об автоответчике ИИ не пишет — это делает система
+    if not parts:
+        return
     await db.add_dialog(scope, "model", "\n".join(parts), keep=40)
     await send_like_human(bot, message.chat.id, parts, business_connection_id=conn_id)
+    key = (conn_id, message.chat.id)
+    if nick and time.monotonic() - _disclosed.get(key, -DISCLOSE_EVERY_SEC) >= DISCLOSE_EVERY_SEC:
+        _disclosed[key] = time.monotonic()
+        await bot.send_message(message.chat.id, f"автоответчик @{nick}", business_connection_id=conn_id, parse_mode=None)
 
 
 # ---------- настройки в личке с ботом ----------

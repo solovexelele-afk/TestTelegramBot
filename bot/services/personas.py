@@ -144,8 +144,11 @@ def _lower_first(s: str) -> str:
 _THOUGHT_RE = re.compile(r"<thought>.*?</thought>|</?thought>|</?think(ing)?>", re.IGNORECASE | re.DOTALL)
 
 
-def humanize(text: str, max_parts: int = 4) -> list[str]:
-    """Делает ответ похожим на живую переписку и делит на отдельные сообщения."""
+def humanize(text: str, max_parts: int = 4, lowercase: bool = True) -> list[str]:
+    """Делает ответ похожим на живую переписку и делит на отдельные сообщения.
+
+    lowercase=False — не трогать регистр (автоответчик копирует манеру владельца как есть).
+    """
     text = _THOUGHT_RE.sub("", text)
     text = _REACTION_RE.sub("", text)
     text = _MD_RE.sub("", text).strip()
@@ -153,7 +156,8 @@ def humanize(text: str, max_parts: int = 4) -> list[str]:
     raw_parts = [p.strip(" -•\t") for p in re.split(r"\n+", text) if p.strip(" -•\t")]
     parts: list[str] = []
     for p in raw_parts:
-        p = _lower_first(p)
+        if lowercase:
+            p = _lower_first(p)
         # одиночная точка в конце — убираем (многоточие оставляем)
         if p.endswith(".") and not p.endswith(".."):
             p = p[:-1]

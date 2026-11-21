@@ -57,14 +57,18 @@ class AIService:
         history: list[tuple[str, str]],
         max_tokens: int = 1024,
         media: tuple[bytes, str] | None = None,
+        temperature: float = 0.9,
+        prefer: list[str] | None = None,
     ) -> str:
         """history: [(role, text)], role = 'user' | 'model'. Последний элемент — новое сообщение.
 
         media — (байты, mime-тип) фото или голосового, прикладывается к последнему сообщению.
+        temperature — «креативность»: ниже = спокойнее и ближе к теме.
+        prefer — какие модели пробовать первыми (например, более умные для автоответчика).
         """
         if self._gemini is not None:
             try:
-                return await self._chat_gemini(system, history, max_tokens, media)
+                return await self._chat_gemini(system, history, max_tokens, media, temperature, prefer)
             except Exception as exc:  # noqa: BLE001 — любой сбой Gemini → пробуем запасной вариант
                 if media is not None:
                     raise AIError(f"Gemini не смог обработать вложение: {exc}") from exc
@@ -74,15 +78,23 @@ class AIService:
         return await self._chat_pollinations(system, history)
 
     async def _chat_gemini(
-        self, system: str, history: list[tuple[str, str]], max_tokens: int, media: tuple[bytes, str] | None
+        self,
+        system: str,
+        history: list[tuple[str, str]],
+        max_tokens: int,
+        media: tuple[bytes, str] | None,
+        temperature: float = 0.9,
+        prefer: list[str] | None = None,
     ) -> str:
-        # сначала модель, которая отвечала последней, затем остальные по порядку
-        order = ([self._working] if self._working else []) + [m for m in self.models if m != self._working]
+        # сначала предпочтительные модели, затем та, что отвечала последней, затем остальные
+        head = list(prefer or []) + ([self._working] if self._working else [])
+        order = list(dict.fromkeys(head + self.models))
         last_exc: Exception | None = None
         for model in order:
             try:
-                text = await self._gemini_once(model, system, history, max_tokens, media)
-                self._working = model
+                text = await self._gemini_once(model, system, history, max_tokens, media, temperature)
+                if not prefer:
+                    self._working = model
                 return text
             except (AIError, asyncio.TimeoutError) as exc:
                 logger.warning("Gemini %s: %s", model, exc)
@@ -96,6 +108,7 @@ class AIService:
         history: list[tuple[str, str]],
         max_tokens: int,
         media: tuple[bytes, str] | None = None,
+        temperature: float = 0.9,
     ) -> str:
         contents = [
             types.Content(role="model" if role == "model" else "user", parts=[types.Part.from_text(text=text)])
@@ -108,7 +121,7 @@ class AIService:
         config = types.GenerateContentConfig(
             system_instruction=system,
             max_output_tokens=max_tokens + (1024 if use_thinking else 0),
-            temperature=0.9,
+            temperature=temperature,
             # для переписки долгие размышления не нужны — так ответ приходит быстрее
             thinking_config=types.ThinkingConfig(thinking_level="LOW") if use_thinking else None,
         )
@@ -120,7 +133,7 @@ class AIService:
         except genai_errors.APIError as exc:
             if exc.code == 400 and use_thinking and "think" in str(exc.message).lower():
                 self._no_thinking.add(model)
-                return await self._gemini_once(model, system, history, max_tokens, media)
+                return await self._gemini_once(model, system, history, max_tokens, media, temperature)
             raise AIError(f"Gemini API error {exc.code}: {exc.message}") from exc
         text = (resp.text or "").strip()
         if not text:

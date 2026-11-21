@@ -65,6 +65,15 @@ for bad in (b"not json", b"[1,2]", json.dumps({"foo": 1}).encode()):
     except ExportError:
         pass
 
-prompt = as_me_prompt("Артём", "пишет с маленькой", samples, "учусь в 10 классе")
-assert "ты — Артём" in prompt and "им: го в кс вечером?\nты: ахахах го" in prompt and "учусь в 10 классе" in prompt
+prompt = as_me_prompt("Артём", "пишет с маленькой", samples, "учусь в 10 классе", contact="Ирина", family=True)
+assert "ты — Артём" in prompt and "им: го в кс вечером?\n  ты: ахахах го" in prompt and "учусь в 10 классе" in prompt
+assert "родственник" in prompt and "без мата" in prompt
+assert "незнакомый" in as_me_prompt("A", "", [], "", first_contact=True)
+
+from bot.services.style import FAMILY_RE, asks_if_bot, strip_disclosure  # noqa: E402
+
+assert FAMILY_RE.search("Мама") and FAMILY_RE.search("мамуля ❤") and not FAMILY_RE.search("Мила")
+assert strip_disclosure(["Та норм всё", "автоответчик @vexelele имба", "это автоответчик если что)", "Ало"], "vexelele") == [
+    "Та норм всё", "Ало"]
+assert asks_if_bot("как будто я ролю с каким то ботом") and not asks_if_bot("го гулять")
 print("style parsing: OK")
